@@ -1,0 +1,68 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { useStore } from '../store/useStore';
+import { useRoute } from '@react-navigation/native';
+import { v4 as uuidv4 } from 'uuid'; // npm install uuid
+
+const reasons = [
+  { code: 'NO-ORDER', label: 'No Order', children: [{ code: 'PLANNED', label: 'Planned' }, { code: 'UNPLANNED', label: 'Unplanned' }] },
+  // Add others as per seed
+];
+
+export default function DowntimeScreen() {
+  const { params } = useRoute();
+  const { machine } = params;
+  const addDowntime = useStore(state => state.addDowntime);
+  const [isActive, setIsActive] = useState(false);
+  const [reason, setReason] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images });
+    if (!result.canceled) {
+      const manipulated = await manipulateAsync(result.assets[0].uri, [{ resize: { width: 800 } }], { compress: 0.5, format: SaveFormat.JPEG });
+      // Watermark: Add text overlay (simplified; use a library for real watermark)
+      setPhoto(manipulated.uri);
+    }
+  };
+
+  const handleStartEnd = () => {
+    if (!isActive) {
+      setIsActive(true);
+    } else {
+      const event = {
+        id: uuidv4(),
+        machineId: machine.id,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        reason,
+        photo,
+        tenantId: 'default-tenant',
+      };
+      addDowntime(event);
+      Alert.alert('Downtime recorded');
+      setIsActive(false);
+    }
+  };
+
+  return (
+    <View className="flex-1 p-4">
+      <Text className="text-xl">Downtime for {machine.name}</Text>
+      <TouchableOpacity className="bg-blue-500 p-2 mt-4" onPress={handleStartEnd}>
+        <Text className="text-white">{isActive ? 'End Downtime' : 'Start Downtime'}</Text>
+      </TouchableOpacity>
+      {isActive && (
+        <>
+          <Text>Select Reason:</Text>
+          {/* Render reason tree as pickers */}
+          <TouchableOpacity className="bg-gray-500 p-2 mt-2" onPress={pickImage}>
+            <Text className="text-white">Attach Photo</Text>
+          </TouchableOpacity>
+          {photo && <Image source={{ uri: photo }} className="w-20 h-20 mt-2" />}
+        </>
+      )}
+    </View>
+  );
+}
